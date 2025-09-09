@@ -125,7 +125,6 @@ def plot_city_map(place_name: str, lat: float, lon: float, box_km: float = 2.0):
         lon (float): Center longitude.
         box_km (float): Size of the bounding box in kilometers.
     """
-    # Convert km to degrees approximately
     delta = (box_km / 2) / 111  # ~1 degree ≈ 111 km
 
     north = lat + delta
@@ -135,10 +134,8 @@ def plot_city_map(place_name: str, lat: float, lon: float, box_km: float = 2.0):
 
     bbox = (north, south, east, west)
 
-    # Correct usage: single bbox argument
     graph = ox.graph_from_bbox(bbox, network_type="all")
 
-    # Geocode area
     try:
         area = ox.geocode_to_gdf(place_name)
     except Exception:
