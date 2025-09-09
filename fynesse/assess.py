@@ -111,3 +111,66 @@ def view(data: Union[pd.DataFrame, Any]) -> None:
 def labelled(data: Union[pd.DataFrame, Any]) -> Union[pd.DataFrame, Any]:
     """Provide a labelled set of data ready for supervised learning."""
     raise NotImplementedError
+
+import osmnx as ox
+import matplotlib.pyplot as plt
+
+def plot_city_map(place_name: str, lat: float, lon: float, box_km: float = 2.0):
+    """
+    Plot a map of a city with streets, buildings, and POIs within a bounding box.
+
+    Args:
+        place_name (str): City or area name.
+        lat (float): Center latitude.
+        lon (float): Center longitude.
+        box_km (float): Size of the bounding box in kilometers.
+    """
+    # Convert km to degrees approximately
+    delta = (box_km / 2) / 111  # ~1 degree ≈ 111 km
+
+    north = lat + delta
+    south = lat - delta
+    east = lon + delta
+    west = lon - delta
+
+    bbox = (north, south, east, west)
+
+    # Correct usage: single bbox argument
+    graph = ox.graph_from_bbox(bbox, network_type="all")
+
+    # Geocode area
+    try:
+        area = ox.geocode_to_gdf(place_name)
+    except Exception:
+        area = None
+
+    nodes, edges = ox.graph_to_gdfs(graph)
+
+    try:
+        buildings = ox.geometries_from_bbox(north, south, east, west, tags={"building": True})
+    except Exception:
+        buildings = None
+
+    try:
+        pois = ox.geometries_from_bbox(north, south, east, west, tags={"amenity": True})
+    except Exception:
+        pois = None
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    if area is not None:
+        area.plot(ax=ax, color="tan", alpha=0.5)
+
+    if buildings is not None and not buildings.empty:
+        buildings.plot(ax=ax, facecolor="gray", edgecolor="gray", alpha=0.7)
+
+    edges.plot(ax=ax, linewidth=1, edgecolor="black", alpha=0.3)
+    nodes.plot(ax=ax, color="black", markersize=1, alpha=0.3)
+
+    if pois is not None and not pois.empty:
+        pois.plot(ax=ax, color="green", markersize=5, alpha=1)
+
+    ax.set_xlim(west, east)
+    ax.set_ylim(south, north)
+    ax.set_title(place_name, fontsize=14)
+    plt.show()
