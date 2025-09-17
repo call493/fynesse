@@ -231,3 +231,43 @@ def plot_city_map(place_name, latitude=None, longitude=None, coords_df=None, box
 
     except Exception as e:
         print(f"[Warning] Could not plot map: {e}")
+
+import osmnx as ox
+import matplotlib.pyplot as plt
+import warnings
+import math
+warnings.filterwarnings("ignore", category=FutureWarning, module='osmnx')
+
+def plot_map(place_name):
+    """
+    Plots the boundary and prints the bounding box coordinates for a given place.
+
+    Parameters:
+    place_name (str): The name of the place (e.g., 'Kenya', 'Nairobi, Kenya')
+
+    Returns:
+    None
+    """
+    try:
+        # Download the boundary polygon
+        boundary = ox.geocode_to_gdf(place_name)
+
+        # Extract the bounding box coordinates
+        minx, miny, maxx, maxy = boundary.total_bounds
+
+        print(f"Bounding box for {place_name}:")
+        print(f"Min Longitude (minx): {minx}")
+        print(f"Min Latitude (miny): {miny}")
+        print(f"Max Longitude (maxx): {maxx}")
+        print(f"Max Latitude (maxy): {maxy}")
+
+        # Plot the map
+        fig, ax = plt.subplots(figsize=(8, 8))
+        boundary.plot(ax=ax, color='lightgrey', edgecolor='black')
+        ax.set_title(f'Map of {place_name}')
+        plt.show()
+
+    except TypeError as e:
+        print(f"Could not plot boundary for {place_name}: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred for {place_name}: {e}")
