@@ -171,3 +171,40 @@ def plot_city_map(place_name: str, lat: float, lon: float, box_km: float = 2.0):
     ax.set_ylim(south, north)
     ax.set_title(place_name, fontsize=14)
     plt.show()
+
+# Comprehensive county name normalization function
+def normalize_county_names(name):
+    """
+    Normalize county names to match the canonical forms in geo-boundaries.
+    This function standardizes various formats to match 'ELGEYO-MARAKWET' format.
+    """
+    if pd.isna(name):
+        return name
+
+    # Convert to uppercase and strip whitespace
+    name_clean = str(name).strip().upper()
+
+    # Handle specific cases that need standardization
+    # Elgeyo/Marakwet variations -> ELGEYO-MARAKWET
+    if 'ELGEYO' in name_clean and 'MARAKWET' in name_clean:
+        return 'ELGEYO-MARAKWET'
+
+    # Tharaka-Nithi variations -> THARAKA (to match canonical geo boundaries)
+    if name_clean in ['THARAKA-NITHI', 'THARAKA NITHI']:
+        return 'THARAKA'
+
+    # Taita/Taveta variations -> TAITA TAVETA
+    if 'TAITA' in name_clean and 'TAVETA' in name_clean:
+        return 'TAITA TAVETA'
+
+    # Remove City suffix from Nairobi
+    if name_clean == 'NAIROBI CITY':
+        return 'NAIROBI'
+
+    # Replace forward slashes and multiple hyphens with single spaces
+    name_clean = name_clean.replace('/', ' ').replace('-', ' ')
+
+    # Standardize multiple spaces to single spaces
+    name_clean = ' '.join(name_clean.split())
+
+    return name_clean
