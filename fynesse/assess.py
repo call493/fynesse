@@ -208,3 +208,41 @@ def normalize_county_names(name):
     name_clean = ' '.join(name_clean.split())
 
     return name_clean
+
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+def plot_primary_schools(schools_file, geojson_url):
+    """
+    Plots primary schools (public vs private) on Kenyan county boundaries.
+
+    Parameters:
+    schools_file (str): URL or path to GeoJSON for schools
+    geojson_url (str): URL or path to Kenyan county boundaries GeoJSON
+
+    Returns:
+    None (displays matplotlib plot)
+    """
+    # Load county boundaries
+    kenya_gdf = gpd.read_file(geojson_url)
+    
+    # Load schools data
+    schools_gdf = gpd.read_file(schools_file)
+    
+    # Reproject schools CRS to match counties
+    schools_gdf = schools_gdf.to_crs(kenya_gdf.crs)
+    
+    # Distinguish by status
+    public_schools = schools_gdf[schools_gdf["Status"] == "Public"]
+    private_schools = schools_gdf[schools_gdf["Status"] == "Private"]
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(12, 12))
+    kenya_gdf.boundary.plot(ax=ax, edgecolor="black", linewidth=0.8)
+    public_schools.plot(ax=ax, color="blue", markersize=1, label="Public Schools")
+    private_schools.plot(ax=ax, color="red", markersize=1, label="Private Schools")
+    
+    ax.set_title("Primary Schools in Kenya (Public vs Private)", fontsize=12)
+    ax.legend()
+    plt.show()
