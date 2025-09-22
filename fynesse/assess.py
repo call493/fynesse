@@ -308,3 +308,286 @@ def plot_schools_on_county_boundaries(
 
 # Example usage:
 # plot_schools_on_county_boundaries()
+
+import matplotlib.pyplot as plt
+
+def plot_population_heatmap(
+    kenya_gdf, 
+    population_df, 
+    county_col_shape="shapeName", 
+    county_col_pop="County", 
+    population_col="Total",
+    title="2019 Kenya Population Distribution by County", 
+    cmap="OrRd", 
+    figsize=(12, 12)
+):
+    # Normalize county names for matching
+    population_df[county_col_pop] = population_df[county_col_pop].str.strip().str.upper()
+    kenya_gdf[county_col_shape] = kenya_gdf[county_col_shape].str.strip().str.upper()
+
+    # Merge population with county boundaries
+    merged = kenya_gdf.merge(
+        population_df, 
+        left_on=county_col_shape, 
+        right_on=county_col_pop, 
+        how="left"
+    )
+
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=figsize)
+    merged.plot(
+        column=population_col,
+        cmap=cmap,
+        linewidth=0.8,
+        edgecolor="black",
+        legend=True,
+        ax=ax
+    )
+
+    ax.set_title(title, fontsize=16)
+    ax.axis("off")
+    plt.show()
+
+# Example usage:
+# plot_population_heatmap(kenya_gdf, population_df)
+
+import folium
+from folium.plugins import HeatMap
+
+def plot_interactive_population_map(
+    kenya_gdf,
+    population_df,
+    county_col_shape="shapeName",
+    county_col_pop="County",
+    population_col="Total",
+    map_center=[0.0236, 37.9062],
+    zoom_start=6,
+    fill_color="OrRd",
+    legend_name="Population (2019)",
+    map_tiles="cartodbpositron"
+):
+    # Normalize county names for matching
+    population_df[county_col_pop] = population_df[county_col_pop].str.strip().str.upper()
+    kenya_gdf[county_col_shape] = kenya_gdf[county_col_shape].str.strip().str.upper()
+
+    # Merge population with county boundaries
+    merged = kenya_gdf.merge(
+        population_df, 
+        left_on=county_col_shape, 
+        right_on=county_col_pop, 
+        how="left"
+    )
+
+    geojson_data = merged.to_json()
+
+    m = folium.Map(location=map_center, zoom_start=zoom_start, tiles=map_tiles)
+
+    folium.Choropleth(
+        geo_data=geojson_data,
+        data=merged,
+        columns=[county_col_shape, population_col],
+        key_on=f"feature.properties.{county_col_shape}",
+        fill_color=fill_color,
+        fill_opacity=1,
+        line_opacity=0.1,
+        legend_name=legend_name
+    ).add_to(m)
+
+    folium.GeoJson(
+        geojson_data,
+        name="County Boundaries",
+        tooltip=folium.GeoJsonTooltip(
+            fields=[county_col_shape, population_col],
+            aliases=["County:", "Population:"]
+        )
+    ).add_to(m)
+
+    return m
+
+# Example usage:
+# m = plot_interactive_population_map(kenya_gdf, population_df)
+# m  # Display the map in Jupyter/Colab
+
+def check_county_mismatches(
+    kenya_gdf,
+    population_df,
+    merged,
+    county_col_shape="shapeName",
+    county_col_pop="County",
+    population_col="Total"
+):
+    # Get unique county sets
+    pop_counties = set(population_df[county_col_pop].unique())
+    geo_counties = set(kenya_gdf[county_col_shape].unique())
+    
+    print(f"\nPopulation counties: {len(pop_counties)}")
+    print(f"Geographic counties: {len(geo_counties)}")
+    print(f"\nCounties in population data but not in geographic data: {pop_counties - geo_counties}")
+    print(f"Counties in geographic data but not in population data: {geo_counties - pop_counties}")
+
+    # Identify missing population data
+    missing = merged[merged[population_col].isna()][[county_col_shape]]
+    print(f"\nCounties with missing population data: {len(missing)}")
+    if len(missing) > 0:
+        print(missing)
+
+# Example usage:
+# check_county_mismatches(kenya_gdf, population_df, merged)
+
+import matplotlib.pyplot as plt
+
+def plot_county_population_heatmap(
+    merged_gdf, 
+    population_col="Total", 
+    title="2019 Kenya Population Distribution by County", 
+    cmap="OrRd", 
+    figsize=(12, 12)
+):
+    fig, ax = plt.subplots(figsize=figsize)
+    merged_gdf.plot(
+        column=population_col,
+        cmap=cmap,
+        linewidth=0.8,
+        edgecolor="black",
+        legend=True,
+        ax=ax
+    )
+    ax.set_title(title, fontsize=16)
+    ax.axis("off")
+    plt.show()
+
+# Example usage:
+# plot_county_population_heatmap(merged)
+
+import plotly.express as px
+
+def plot_primary_vs_secondary_schools(
+    all_schools_gdf, 
+    county_col="County", 
+    level_col="LEVEL", 
+    primary_label="Primary", 
+    secondary_label="Secondary",
+    title="Primary vs Secondary Schools by County in Kenya"
+):
+    # Aggregate counts by county and school level
+    counts = all_schools_gdf.groupby([county_col, level_col]).size().unstack(fill_value=0).reset_index()
+    
+    # Create scatter plot
+    fig = px.scatter(
+        counts,
+        x=primary_label,
+        y=secondary_label,
+        text=county_col,
+        hover_name=county_col,
+        labels={primary_label: primary_label, secondary_label: secondary_label},
+        title=title,
+    )
+    fig.update_traces(marker=dict(size=10, opacity=0.7))
+    fig.update_layout(showlegend=False)
+    fig.show()
+
+# Example usage:
+# plot_primary_vs_secondary_schools(all_schools_gdf)
+
+import geopandas as gpd
+import pandas as pd
+import folium
+from folium.plugins import MarkerCluster
+import zipfile
+import requests
+import os
+
+def plot_schools_choropleth_map(
+    schools_zip_url="https://github.com/call493/MLFC/raw/main/schools.zip",
+    local_zip_path="schools.zip",
+    extracted_dir="schools_extracted",
+    geojson_url="https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/KEN/ADM1/geoBoundaries-KEN-ADM1.geojson",
+    map_center=[0.2, 37.5],
+    map_zoom=6,
+    html_file="schools_counties.html",
+    normalize_func=None
+):
+    # Download and extract the schools shapefile
+    response = requests.get(schools_zip_url)
+    with open(local_zip_path, "wb") as f:
+        f.write(response.content)
+    with zipfile.ZipFile(local_zip_path, "r") as zip_ref:
+        zip_ref.extractall(extracted_dir)
+
+    # Find the .shp file
+    shp_file = None
+    for root, _, files in os.walk(extracted_dir):
+        for file in files:
+            if file.endswith(".shp"):
+                shp_file = os.path.join(root, file)
+                break
+        if shp_file:
+            break
+
+    # Load GeoDataFrames
+    all_schools_gdf = gpd.read_file(shp_file)
+    kenya_gdf = gpd.read_file(geojson_url)
+    all_schools_gdf = all_schools_gdf.to_crs(kenya_gdf.crs)
+
+    # Normalize county names
+    if normalize_func is not None:
+        all_schools_gdf['County'] = all_schools_gdf['County'].apply(normalize_func)
+        kenya_gdf['shapeName'] = kenya_gdf['shapeName'].apply(normalize_func)
+    else:
+        all_schools_gdf['County'] = all_schools_gdf['County'].str.strip().str.upper()
+        kenya_gdf['shapeName'] = kenya_gdf['shapeName'].str.strip().str.upper()
+
+    # Aggregate school counts
+    school_counts = all_schools_gdf.groupby(['County', 'LEVEL']).size().unstack(fill_value=0)
+
+    # Merge with county boundaries
+    kenya_gdf = kenya_gdf.merge(school_counts, how='left', left_on='shapeName', right_index=True)
+    kenya_gdf["Primary"] = kenya_gdf.get("Primary", 0).fillna(0).astype(int)
+    kenya_gdf["Secondary"] = kenya_gdf.get("Secondary", 0).fillna(0).astype(int)
+
+    # Create Folium map
+    m = folium.Map(location=map_center, zoom_start=map_zoom)
+
+    folium.Choropleth(
+        geo_data=kenya_gdf,
+        name='Primary Schools',
+        data=kenya_gdf,
+        columns=['shapeName', 'Primary'],
+        key_on='feature.properties.shapeName',
+        fill_color='Greens',
+        fill_opacity=0.6,
+        line_opacity=0.4,
+        legend_name='Number of Primary Schools'
+    ).add_to(m)
+
+    folium.Choropleth(
+        geo_data=kenya_gdf,
+        name='Secondary Schools',
+        data=kenya_gdf,
+        columns=['shapeName', 'Secondary'],
+        key_on='feature.properties.shapeName',
+        fill_color='Blues',
+        fill_opacity=0.4,
+        line_opacity=0.2,
+        legend_name='Number of Secondary Schools'
+    ).add_to(m)
+
+    folium.GeoJson(
+        kenya_gdf,
+        name="Counties",
+        style_function=lambda x: {'fillColor': '#00000000', 'color': 'black', 'weight': 1},
+        tooltip=folium.GeoJsonTooltip(
+            fields=['shapeName', 'Primary', 'Secondary'],
+            aliases=['County', 'Primary Schools', 'Secondary Schools']),
+    ).add_to(m)
+
+    folium.LayerControl().add_to(m)
+    m.save(html_file)
+    return m
+
+# Example usage:
+# from fynesse.assess import normalize_county_names
+# m = plot_schools_choropleth_map(normalize_func=normalize_county_names)
+# m  # displays the map in Colab/Jupyter
+
+
