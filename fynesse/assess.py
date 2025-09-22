@@ -246,3 +246,65 @@ def plot_primary_schools(schools_file, geojson_url):
     ax.set_title("Primary Schools in Kenya (Public vs Private)", fontsize=12)
     ax.legend()
     plt.show()
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import os
+import requests
+import zipfile
+
+def plot_schools_on_county_boundaries(
+    schools_zip_url="https://github.com/call493/MLFC/raw/main/schools.zip",
+    local_zip_path="schools.zip",
+    extracted_dir="schools_extracted",
+    geojson_url="https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/KEN/ADM1/geoBoundaries-KEN-ADM1.geojson"
+):
+    # Load counties
+    kenya_gdf = gpd.read_file(geojson_url)
+
+    # Download the zip file with school shapefiles
+    print(f"Downloading {schools_zip_url}...")
+    response = requests.get(schools_zip_url)
+    response.raise_for_status()
+    with open(local_zip_path, 'wb') as f:
+        f.write(response.content)
+    print(f"Downloaded to {local_zip_path}")
+
+    # Extract the zip file
+    print(f"Extracting {local_zip_path}...")
+    with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extracted_dir)
+    print(f"Extracted to {extracted_dir}")
+
+    # Find the .shp file in the extracted directory
+    shp_file = None
+    for root, _, files in os.walk(extracted_dir):
+        for file in files:
+            if file.endswith(".shp"):
+                shp_file = os.path.join(root, file)
+                break
+        if shp_file:
+            break
+
+    if shp_file:
+        print(f"Shapefile found at: {shp_file}")
+        all_schools_gdf = gpd.read_file(shp_file)
+        all_schools_gdf = all_schools_gdf.to_crs(kenya_gdf.crs)
+
+        primary_schools = all_schools_gdf[all_schools_gdf["LEVEL"].str.lower() == "primary"]
+        secondary_schools = all_schools_gdf[all_schools_gdf["LEVEL"].str.lower() == "secondary"]
+
+        fig, ax = plt.subplots(figsize=(12, 12))
+        kenya_gdf.boundary.plot(ax=ax, edgecolor="black", linewidth=0.8)
+        if not primary_schools.empty:
+            primary_schools.plot(ax=ax, color="green", markersize=5, label="Primary Schools")
+        if not secondary_schools.empty:
+            secondary_schools.plot(ax=ax, color="blue", markersize=5, label="Secondary Schools")
+        ax.set_title("Schools in Kenya (Primary vs Secondary)", fontsize=12)
+        ax.legend()
+        plt.show()
+    else:
+        print("Shapefile (.shp) not found in the extracted directory.")
+
+# Example usage:
+# plot_schools_on_county_boundaries()
