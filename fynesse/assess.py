@@ -590,4 +590,405 @@ def plot_schools_choropleth_map(
 # m = plot_schools_choropleth_map(normalize_func=normalize_county_names)
 # m  # displays the map in Colab/Jupyter
 
+def plot_population_with_school_locations(kenya_gdf, population_df, schools_gdf):
+    import matplotlib.pyplot as plt
+
+    # Merge population data
+    merged = kenya_gdf.merge(
+        population_df, left_on="shapeName", right_on="County", how="left"
+    )
+
+    # Project schools to match county CRS
+    schools_gdf = schools_gdf.to_crs(kenya_gdf.crs)
+    public_schools = schools_gdf[schools_gdf["Status"] == "Public"]
+    private_schools = schools_gdf[schools_gdf["Status"] == "Private"]
+
+    # Figure setup
+    fig, ax = plt.subplots(figsize=(16, 16))
+
+    # County population heatmap
+    merged.plot(
+        column="Total",
+        cmap="YlOrRd",
+        linewidth=0.8,
+        edgecolor="black",
+        legend=True,
+        ax=ax,
+        alpha=0.8,
+        legend_kwds={
+            'label': "Population (2019)",
+            'orientation': "vertical",
+            'shrink': 0.6
+        }
+    )
+
+    # School overlays
+    public_schools.plot(ax=ax, color="blue", markersize=4, label="Public Schools", alpha=0.7)
+    private_schools.plot(ax=ax, color="red", markersize=4, label="Private Schools", alpha=0.7)
+
+    # Title and legend
+    ax.set_title(
+        "Kenya: Population Distribution (2019) with School Locations\nPublic vs Private Schools Overlay",
+        fontsize=18, fontweight='bold', pad=20
+    )
+    ax.axis("off")
+    ax.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98))
+
+    # Statistics in plot
+    total_public = len(public_schools)
+    total_private = len(private_schools)
+    stats_text = f"Total Schools:\nPublic: {total_public:,}\nPrivate: {total_private:,}"
+    ax.text(
+        0.02, 0.98, stats_text,
+        transform=ax.transAxes, fontsize=12,
+        verticalalignment='top',
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.9),
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+    # Print summary
+    print(f"\n=== COMBINED HEATMAP SUMMARY ===")
+    print(f"Total counties visualized: {len(merged)}")
+    print(f"Public schools plotted: {total_public:,}")
+    print(f"Private schools plotted: {total_private:,}")
+    print(f"Total schools: {total_public + total_private:,}")
+    print(f"Total population (2019): {merged['Total'].sum():,.0f}")
+    print(f"Average population per county: {merged['Total'].mean():,.0f}")
+
+# Usage example:
+# plot_population_with_school_locations(kenya_gdf, population_df, schools_gdf)
+
+def merge_literacy_and_poverty(literacy_df, poverty_df):
+    """
+    Clean and normalize county names, merge literacy and poverty dataframes,
+    and print diagnostics about merging and missing data.
+    
+    Args:
+        literacy_df (pandas.DataFrame): Literacy dataset with 'County' column.
+        poverty_df (pandas.DataFrame): Poverty dataset with 'County' column.
+    
+    Returns:
+        pandas.DataFrame: Merged dataframe with indicator column '_merge'.
+    """
+    import pandas as pd
+
+    # Clean and normalize county names
+    poverty_df['County'] = poverty_df['County'].str.strip().str.title()
+    literacy_df['County'] = literacy_df['County'].str.strip().str.title()
+
+    # Merge on County with indicator
+    merged_df = pd.merge(literacy_df, poverty_df, on='County', how='outer', indicator=True)
+
+    print("\nMerged dataframe shape:", merged_df.shape)
+    print("\nMerged dataframe columns:", merged_df.columns.tolist())
+    print(merged_df.head())
+
+    # Diagnostics: left/right only, both
+    left_only = merged_df[merged_df['_merge'] == 'left_only']
+    right_only = merged_df[merged_df['_merge'] == 'right_only']
+    both = merged_df[merged_df['_merge'] == 'both']
+
+    print(f"\nCounties in literacy data only (missing in poverty data): {len(left_only)}")
+    if len(left_only) > 0:
+        print(left_only[['County']])
+
+    print(f"\nCounties in poverty data only (missing in literacy data): {len(right_only)}")
+    if len(right_only) > 0:
+        print(right_only[['County']])
+
+    print(f"\nCounties successfully merged: {len(both)}")
+
+    # Check counties with any missing data
+    missing_data_counties = merged_df[merged_df.isna().any(axis=1)]
+    print(f"\nCounties with missing data after merge: {len(missing_data_counties)}")
+    if len(missing_data_counties) > 0:
+        print(missing_data_counties[['County', '_merge']])
+
+    return merged_df
+
+# Example usage:
+# merged_df = merge_literacy_and_poverty(literacy_df, poverty_df)
+
+def clean_and_summarize_merged_df(merged_df, output_csv='poverty_literacy_merged_clean_2019.csv'):
+    """
+    Filters to successfully merged counties, drops merge indicator,
+    prints dataset stats, checks for missing values, saves cleaned version,
+    and previews Pearson correlation between poverty and literacy rates.
+    
+    Args:
+        merged_df (pandas.DataFrame): DataFrame with '_merge' column from previous merge step.
+        output_csv (str): Filename for saving the cleaned, merged DataFrame.
+    
+    Returns:
+        pandas.DataFrame: Cleaned final DataFrame (df_analysis)
+        float: Pearson correlation coefficient
+        float: Pearson correlation p-value
+    """
+    from scipy.stats import pearsonr
+
+    # Filter to both-only records, drop indicator column
+    final_df = merged_df[merged_df['_merge'] == 'both'].copy().drop(columns=['_merge'])
+
+    print(f"Final dataset shape: {final_df.shape}")
+    print(f"Final dataset columns: {final_df.columns.tolist()}")
+
+    # Display summary stats
+    print("\n=== MERGED DATASET SUMMARY ===")
+    print(f"Counties successfully merged: {len(final_df)}")
+    print(f"Literacy Rate - Mean: {final_df['Literacy_Rate_Percent'].mean():.1f}%, Std: {final_df['Literacy_Rate_Percent'].std():.1f}%")
+    print(f"Poverty Rate - Mean: {final_df['Headcount_Rate_Percent'].mean():.1f}%, Std: {final_df['Headcount_Rate_Percent'].std():.1f}%")
+    print(final_df.head())
+
+    # Check for any remaining missing values
+    missing_vals = final_df.isnull().sum()
+    print("\nMissing values per column:")
+    for col in final_df.columns:
+        if missing_vals[col] > 0:
+            print(f"{col}: {missing_vals[col]}")
+    if missing_vals.sum() == 0:
+        print("No missing values in the final dataset!")
+
+    # Save cleaned merged dataset
+    final_df.to_csv(output_csv, index=False)
+    print(f"\nCleaned merged dataset saved as '{output_csv}'")
+    print("Ready for correlation and regression analysis!")
+
+    # Set final dataframe for analysis
+    df_analysis = final_df.copy()
+    print(f"\nWorking dataset 'df_analysis' created with {len(df_analysis)} counties")
+    print("Dataset ready for correlation and regression analysis in subsequent cells.")
+
+    # Quick Pearson correlation preview
+    corr_coef, p_value = pearsonr(
+        df_analysis['Headcount_Rate_Percent'], df_analysis['Literacy_Rate_Percent']
+    )
+    print(f"\nQuick correlation preview:")
+    print(f"Pearson correlation: {corr_coef:.3f} (p-value: {p_value:.2e})")
+    if p_value < 0.05:
+        print("The correlation is statistically significant!")
+    else:
+        print("The correlation is not statistically significant.")
+
+    return df_analysis, corr_coef, p_value
+
+# Example usage:
+# df_analysis, corr_coef, p_value = clean_and_summarize_merged_df(merged_df)
+
+def correlate_and_plot_poverty_literacy(final_df, output_csv='poverty_literacy_merged_2019.csv'):
+    """
+    Drops rows with NA in main variables, prints top rows, 
+    plots regression/correlation between Poverty Rate & Literacy Rate,
+    computes Pearson and Spearman correlations, prints results, and
+    saves cleaned dataset to CSV.
+    
+    Args:
+        final_df (pandas.DataFrame): Cleaned dataframe with numerical columns.
+        output_csv (str): Filename for saving the further cleaned dataframe.
+    
+    Returns:
+        dict: Dictionary with Pearson and Spearman correlation coefficients and p-values.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import pearsonr, spearmanr
+
+    # Drop NA for main variables
+    final_df = final_df.dropna(subset=['Headcount_Rate_Percent', 'Literacy_Rate_Percent'])
+    print(final_df.head())
+
+    # Plot
+    plt.figure(figsize=(10,6))
+    sns.regplot(x='Headcount_Rate_Percent', y='Literacy_Rate_Percent', data=final_df)
+    plt.title('Correlation between Poverty Rate and Literacy Rate (2019)')
+    plt.xlabel('Poverty Rate (%)')
+    plt.ylabel('Literacy Rate (%)')
+    plt.grid(True)
+    plt.show()
+
+    # Correlations
+    pearson_corr, pearson_p = pearsonr(final_df['Headcount_Rate_Percent'], final_df['Literacy_Rate_Percent'])
+    spearman_corr, spearman_p = spearmanr(final_df['Headcount_Rate_Percent'], final_df['Literacy_Rate_Percent'])
+
+    print(f"Pearson correlation coefficient: {pearson_corr:.3f} (p-value: {pearson_p:.3g})")
+    print(f"Spearman correlation coefficient: {spearman_corr:.3f} (p-value: {spearman_p:.3g})")
+
+    # Save cleaned CSV (only records with both values present)
+    final_df.to_csv(output_csv, index=False)
+    
+    return {
+        "pearson_corr": pearson_corr,
+        "pearson_p": pearson_p,
+        "spearman_corr": spearman_corr,
+        "spearman_p": spearman_p,
+        "final_df": final_df
+    }
+
+# Example usage:
+# results = correlate_and_plot_poverty_literacy(final_df)
+
+def identify_outlier_counties_linear(final_df):
+    """
+    Fits linear regression to predict Literacy Rate from Poverty Rate,
+    computes prediction and residuals, sorts counties by absolute residuals,
+    and prints top outliers.
+    
+    Args:
+        final_df (pandas.DataFrame): Cleaned dataframe with numeric poverty and literacy columns.
+    
+    Returns:
+        pandas.DataFrame: DataFrame of counties sorted by absolute residuals.
+        sklearn.linear_model.LinearRegression: Fitted model (for reuse).
+    """
+    from sklearn.linear_model import LinearRegression
+    import numpy as np
+
+    # Prepare data for regression
+    X = final_df[['Headcount_Rate_Percent']]
+    y = final_df['Literacy_Rate_Percent']
+    model = LinearRegression().fit(X, y)
+    final_df['pred_lit'] = model.predict(X)
+    final_df['residual'] = y - final_df['pred_lit']
+
+    # Absolute residuals for outlier sorting
+    outliers = final_df.loc[
+        abs(final_df['residual']).sort_values(ascending=False).index
+    ][['County', 'Headcount_Rate_Percent', 'Literacy_Rate_Percent', 'pred_lit', 'residual']]
+    
+    print("Top outlier counties:\n", outliers.head(10))
+    
+    return outliers, model
+
+# Example usage:
+# outliers_df, model = identify_outlier_counties_linear(final_df)
+
+def fit_multivariate_ols(final_df, response='Literacy_Rate_Percent', predictors=None):
+    """
+    Fits a multivariate OLS regression for the given response and predictors,
+    prints summary, and returns the fitted model.
+    
+    Args:
+        final_df (pandas.DataFrame): DataFrame with all required columns.
+        response (str): Dependent variable (default 'Literacy_Rate_Percent').
+        predictors (list or None): List of predictors. If None, uses default.
+    
+    Returns:
+        statsmodels.regression.linear_model.RegressionResultsWrapper: Fitted OLS model.
+    """
+    import statsmodels.api as sm
+
+    if predictors is None:
+        predictors = [
+            'Headcount_Rate_Percent',
+            'Population_Thousands',
+            'Poverty_Gap_Percent',
+            'Severity_Percent',
+        ]
+    
+    # Filter predictors by presence in dataframe
+    predictors = [col for col in predictors if col in final_df.columns]
+    X = final_df[predictors]
+    X = sm.add_constant(X)
+    y = final_df[response]
+
+    model = sm.OLS(y, X).fit()
+    print(model.summary())
+    return model
+
+# Example usage:
+# ols_model = fit_multivariate_ols(final_df)
+
+def classify_high_literacy(final_df, predictors=None, test_size=0.3, random_state=42):
+    """
+    Classifies counties as high/low literacy using median split and logistic regression,
+    prints confusion matrix and classification report.
+    
+    Args:
+        final_df (pandas.DataFrame): DataFrame with literacy and predictors.
+        predictors (list or None): List of predictors; if None, uses default.
+        test_size (float): Proportion of data for test split.
+        random_state (int): Reproducibility seed.
+    
+    Returns:
+        dict: Contains model, test data, predictions, and reports.
+    """
+    from sklearn.model_selection import train_test_split
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import classification_report, confusion_matrix
+
+    # Create high_literacy column via median split
+    median_lit = final_df['Literacy_Rate_Percent'].median()
+    final_df['high_literacy'] = (final_df['Literacy_Rate_Percent'] >= median_lit).astype(int)
+    
+    if predictors is None:
+        predictors = [
+            'Headcount_Rate_Percent',
+            'Poverty_Gap_Percent',
+            'Severity_Percent',
+            'Population_Thousands'
+        ]
+    predictors = [col for col in predictors if col in final_df.columns]
+    
+    # Split features and target
+    X = final_df[predictors]
+    y = final_df['high_literacy']
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y
+    )
+    
+    clf = LogisticRegression()
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred, target_names=['Low Literacy', 'High Literacy']))
+    
+    return {
+        "model": clf,
+        "X_test": X_test,
+        "y_test": y_test,
+        "y_pred": y_pred,
+        "confusion_matrix": confusion_matrix(y_test, y_pred),
+        "classification_report": classification_report(y_test, y_pred, target_names=['Low Literacy', 'High Literacy'])
+    }
+
+# Example usage:
+# output = classify_high_literacy(final_df)
+
+def fit_reduced_ols(final_df, response='Literacy_Rate_Percent', predictors=None):
+    """
+    Fits an OLS regression with a reduced set of predictors and prints the summary.
+    
+    Args:
+        final_df (pandas.DataFrame): DataFrame with relevant columns.
+        response (str): Target variable. Default is 'Literacy_Rate_Percent'.
+        predictors (list or None): Predictors to use. If None, uses ['Headcount_Rate_Percent', 'Population_Thousands'].
+    
+    Returns:
+        statsmodels.regression.linear_model.RegressionResultsWrapper: Fitted OLS model.
+    """
+    import statsmodels.api as sm
+
+    if predictors is None:
+        predictors = ['Headcount_Rate_Percent', 'Population_Thousands']
+        
+    predictors = [col for col in predictors if col in final_df.columns]
+    X = final_df[predictors]
+    X = sm.add_constant(X)
+    y = final_df[response]
+
+    model = sm.OLS(y, X).fit()
+    print(model.summary())
+    return model
+
+# Example usage:
+# reduced_model = fit_reduced_ols(final_df)
+
+
+
+
+
+
 
